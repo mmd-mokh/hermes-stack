@@ -7,6 +7,7 @@
 # ============================================================
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 import time
@@ -78,6 +79,27 @@ def write_summary(text: str) -> None:
             f.write(text)
 
 
+def create_space(api: HfApi, repo_id: str) -> str:
+    """Create or reuse a Hugging Face Space across supported hub library versions."""
+    params = {
+        "repo_id": repo_id,
+        "repo_type": "space",
+        "private": PRIVATE_SPACE,
+        "exist_ok": True,
+        "space_hardware": "cpu-basic",
+    }
+    create_repo_sig = inspect.signature(HfApi.create_repo)
+    if "space_sdk" in create_repo_sig.parameters:
+        params["space_sdk"] = "docker"
+    elif "sdk" in create_repo_sig.parameters:
+        params["sdk"] = "docker"
+    else:
+        raise TypeError(
+            "Unsupported huggingface_hub version: create_repo() does not accept space_sdk or sdk."
+        )
+    return api.create_repo(**params)
+
+
 def main() -> int:
     hf_user, space_name = check_env()
     repo_id = f"{hf_user}/{space_name}"
@@ -124,14 +146,7 @@ def main() -> int:
 
     # ------------------------------------------------------ create repos
     print(f"[1/5] Creating (or reusing) Space {repo_id} (sdk=docker, cpu-basic, {'private' if PRIVATE_SPACE else 'public'})…")
-    url = api.create_repo(
-        repo_id=repo_id,
-        repo_type="space",
-        sdk="docker",
-        private=PRIVATE_SPACE,
-        exist_ok=True,
-        space_hardware="cpu-basic",
-    )
+    url = create_space(api, repo_id)
     print(f"      -> {url}")
 
     print(f"[1/5] Creating (or reusing) private backup dataset {backup_repo}…")
